@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "urirun-fleet"
+version = "0.1.0"
+description = "Fleet reconciliation for URI nodes: desired → actual → diff → reconcile → verify, with a readiness gate so tasks run only on ready nodes."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Tom Sapletta" }]
+dependencies = []
+
+[project.optional-dependencies]
+yaml = ["pyyaml>=6"]
+
+[project.scripts]
+urirun-fleet = "urirun_fleet.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["urirun_fleet*"]

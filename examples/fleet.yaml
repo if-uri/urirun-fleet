@@ -1,0 +1,38 @@
+# Fleet desired-state — the host's source of truth for every URI node.
+# `urirun-fleet reconcile --fleet examples/fleet.yaml --nodes ~/.urirun/nodes.json --node lenovo`
+nodes:
+  lenovo:
+    channel: dev
+    aliases: [laptop, "192.168.188.201"]     # the node reports name "laptop" — same object
+    expected_reported_name: laptop
+    urirun:
+      source: git
+      repo: https://github.com/if-uri/urirun.git
+      ref: main
+      min_version: "0.4.196"
+    connectors:
+      kvm: { source: git, ref: main }
+      urivision: { source: git, ref: main }
+      nodeadmin: { source: git, ref: main }   # node-side backend for remote reconcile (restart/rebuild/upgrade)
+    registry:
+      mode: entry-points
+      require_schemes: [env, node, kvm]      # schemes the node must serve directly
+    # capabilities = require an ABILITY, satisfiable by any of several routes.
+    # (a node without screen:// can still capture via kvm://.../screen/query/capture)
+    required_capabilities:
+      screen_capture:
+        any_of:
+          - "screen://*/screen/query/capture"
+          - "kvm://*/screen/query/capture"
+          - "view://*/screenshot/query/capture"
+      browser_control:
+        any_of:
+          - "browser://*/page/command/navigate"
+          - "cdp://*/page/command/navigate"
+      vision_decision:
+        any_of:
+          - "urivision://*/process/command/run"
+    services:
+      node: { port: 8766, require_run_auth: true, manage: true }
+    policies:
+      allow: [ "env://**", "node://**", "kvm://**", "browser://**", "urivision://**" ]
