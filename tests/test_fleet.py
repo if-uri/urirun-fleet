@@ -115,3 +115,26 @@ def test_normalize_extracts_schemes_from_route_dicts():
     routes = [{"uri": "env://laptop/runtime/query/health"}, {"uri": "kvm://host/screen/query/capture"}]
     a = actual_state.normalize("laptop", True, LENOVO_HEALTH, routes)
     assert {"env", "kvm"} <= a["schemes"]
+
+
+def test_provenance_carries_source_version_and_when():
+    from urirun_fleet import provenance
+    # a real installed module in this repo's venv
+    p = provenance.of("urirun_fleet.provenance", ran_on="testnode")
+    assert p["module"] == "urirun_fleet.provenance"
+    assert p["ranOn"] == "testnode" and p["python"]
+    assert "file" in p and "updatedAt" in p            # WHERE + WHEN
+    # urirun_fleet lives in a git checkout → source+sha present
+    assert p.get("source", "").startswith("git+") and "sha" in p
+
+
+def test_stamp_adds_meta_idempotently():
+    from urirun_fleet import provenance
+    env = {"ok": True, "value": 42}
+    out = provenance.stamp(env, "urirun_fleet.provenance", uri="node://laptop/x/query/y")
+    assert out["_meta"]["module"] == "urirun_fleet.provenance"
+    assert out["_meta"]["invokedUri"] == "node://laptop/x/query/y"
+    # idempotent: a second stamp does not overwrite
+    before = out["_meta"]
+    provenance.stamp(out, "other.module")
+    assert out["_meta"] is before
