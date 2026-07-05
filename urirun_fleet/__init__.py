@@ -9,11 +9,11 @@ from __future__ import annotations
 
 from . import (
     actual_state, capabilities, desired_state, diff, events, executor,
-    node_client, reconciler, rollout, smoke, status,
+    node_client, provenance, reconciler, resolver, rollout, smoke, status,
 )
 from .status import Readiness, classify
 
 __all__ = [
     "actual_state", "capabilities", "desired_state", "diff", "events", "executor",
-    "node_client", "reconciler", "rollout", "smoke", "status", "Readiness", "classify",
+    "node_client", "provenance", "reconciler", "resolver", "rollout", "smoke", "status", "Readiness", "classify",
 ]

@@ -148,3 +148,67 @@ def test_plan_with_steps_but_no_key_is_management_locked():
     p = reconciler.plan(desired, actual)
     assert p["steps"] and p["reconcilable"] is False
     assert any(b["kind"] == "management_locked" for b in p["blocked"])
+
+
+# --- capability resolver: the LLM reasoning loop ---------------------------------
+def _fake_llm(script):
+    """A fake completer that returns queued JSON replies in order (one per round)."""
+    calls = {"n": 0}
+    def complete(prompt):
+        i = min(calls["n"], len(script) - 1); calls["n"] += 1
+        return script[i]
+    return complete
+
+
+def test_resolver_reframes_text_editor_to_headless_document():
+    from urirun_fleet import resolver
+    # NEED: write a document. Node has NO GUI editor, but a doc connector is installable.
+    available = ["kvm://laptop/screen/query/capture", "node://laptop/connector/command/install"]
+    catalog = {"sheet": {"provides": ["sheet://*/rows/command/write"]},
+               "doc": {"provides": ["doc://*/document/command/write"]}}
+    # LLM ranks a headless-doc strategy first (reframes away from a GUI editor)
+    llm = _fake_llm(['{"strategies":[{"id":"headless-doc","summary":"generate the .odt directly",'
+                     '"needs":["doc://*/document/command/write"],'
+                     '"steps":[{"uri":"doc://laptop/document/command/write","payload":{"text":"..."}}],'
+                     '"reframes":true}]}'])
+    r = resolver.resolve("napisz artykuł w edytorze tekstu", available, catalog, llm, node="laptop")
+    assert r["resolved"] and r["feasibility"] == "installable"
+    # plan installs the doc connector, THEN writes — no GUI editor needed
+    uris = [s["uri"] for s in r["plan"]]
+    assert "node://laptop/connector/command/install" in uris[0]
+    assert r["plan"][0]["payload"]["id"] == "doc"
+    assert uris[-1].endswith("document/command/write")
+
+
+def test_resolver_prefers_already_available_capability():
+    from urirun_fleet import resolver
+    available = ["sheet://laptop/rows/command/write"]
+    llm = _fake_llm(['{"strategies":[{"id":"use-sheet","summary":"already have it",'
+                     '"needs":["sheet://*/rows/command/write"],'
+                     '"steps":[{"uri":"sheet://laptop/rows/command/write","payload":{}}]}]}'])
+    r = resolver.resolve("zapisz dane do arkusza", available, {}, llm, node="laptop")
+    assert r["resolved"] and r["feasibility"] == "available"
+    assert len(r["plan"]) == 1  # no install step — capability already served
+
+
+def test_resolver_loops_past_blocked_then_finds_alternative():
+    from urirun_fleet import resolver
+    available = ["fs://laptop/file/command/write"]
+    catalog = {}  # nothing installable
+    # round 1: a GUI strategy that's blocked; round 2: reframe to fs:// (available)
+    llm = _fake_llm([
+        '{"strategies":[{"id":"gui-editor","summary":"open GUI editor","needs":["app://*/editor/command/launch"]}]}',
+        '{"strategies":[{"id":"write-file","summary":"write the file directly",'
+        '"needs":["fs://*/file/command/write"],'
+        '"steps":[{"uri":"fs://laptop/file/command/write","payload":{"path":"a.txt","text":"hi"}}]}]}',
+    ])
+    r = resolver.resolve("stwórz notatkę", available, catalog, llm, node="laptop")
+    assert r["resolved"] and r["strategy"]["id"] == "write-file"
+    assert any(c["feasibility"] == "blocked" for c in r["considered"])  # gui-editor was tried+rejected
+
+
+def test_resolver_unresolved_when_all_blocked():
+    from urirun_fleet import resolver
+    llm = _fake_llm(['{"strategies":[{"id":"x","needs":["mcp://*/y/command/z"]}]}'])
+    r = resolver.resolve("cos niemozliwego", [], {}, llm, node="laptop")
+    assert r["resolved"] is False and "x" in r["tried"]
