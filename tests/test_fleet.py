@@ -156,10 +156,12 @@ def test_auto_reconcile_heals_before_asking():
         assert calls and out["execution"]["ok"]
 
 
-def test_auto_reconcile_escalates_when_blocked():
+def test_auto_reconcile_escalates_when_heal_fails():
     from urirun_fleet import reconciler
     desired = {"node": "n1", "runtime": {"version": "0.4.194"}, "connectors": ["kvm"]}
-    actual = {"node": "n1", "online": True, "enrolled": False, "runtime": {"version": "0.4.194"},
-              "connectors": ["kvm"], "routes": ["kvm://n1/x"]}   # not enrolled → management_locked/blocked
-    out = reconciler.auto_reconcile_before_ask(desired, actual, execute_fn=lambda p: {"ok": True})
-    assert out["action"] == "ask_host"   # blocked plan must escalate, not silently auto-run
+    actual = {"node": "n1", "online": True, "enrolled": True, "runtime": {"version": "0.4.190"},
+              "connectors": ["kvm"], "routes": ["kvm://n1/x"]}
+    # the auto-reconcile runs but does NOT make the node ready → escalate to the host, not a silent pass
+    out = reconciler.auto_reconcile_before_ask(desired, actual,
+                                               execute_fn=lambda p: {"ok": False, "verified": False})
+    assert out["action"] == "ask_host" and "still not ready" in out["reason"]
