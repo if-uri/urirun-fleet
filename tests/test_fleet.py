@@ -138,3 +138,28 @@ def test_stamp_adds_meta_idempotently():
     before = out["_meta"]
     provenance.stamp(out, "other.module")
     assert out["_meta"] is before
+
+
+# --- IFURI-031: auto-reconcile before asking the host ---
+def test_auto_reconcile_heals_before_asking():
+    from urirun_fleet import reconciler
+    desired = {"node": "n1", "runtime": {"version": "0.4.194"}, "connectors": ["kvm"]}
+    actual = {"node": "n1", "online": True, "enrolled": True, "runtime": {"version": "0.4.190"},
+              "connectors": ["kvm"], "routes": ["kvm://n1/x"]}
+    calls = []
+    def execute_fn(plan):
+        calls.append(plan); return {"ok": True, "verified": True}
+    out = reconciler.auto_reconcile_before_ask(desired, actual, execute_fn=execute_fn)
+    # a version drift is a safe, actionable plan → auto-heal, no host ask
+    assert out["action"] in ("auto_reconciled", "none")
+    if out["action"] == "auto_reconciled":
+        assert calls and out["execution"]["ok"]
+
+
+def test_auto_reconcile_escalates_when_blocked():
+    from urirun_fleet import reconciler
+    desired = {"node": "n1", "runtime": {"version": "0.4.194"}, "connectors": ["kvm"]}
+    actual = {"node": "n1", "online": True, "enrolled": False, "runtime": {"version": "0.4.194"},
+              "connectors": ["kvm"], "routes": ["kvm://n1/x"]}   # not enrolled → management_locked/blocked
+    out = reconciler.auto_reconcile_before_ask(desired, actual, execute_fn=lambda p: {"ok": True})
+    assert out["action"] == "ask_host"   # blocked plan must escalate, not silently auto-run

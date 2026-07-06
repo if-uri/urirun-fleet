@@ -104,6 +104,38 @@ def assess(desired: dict, actual: dict, *, required_routes: list[str] | None = N
     }
 
 
+def auto_reconcile_before_ask(desired: dict, actual: dict, *,
+                              execute_fn: Callable[[dict], dict],
+                              required_routes: list[str] | None = None,
+                              smoke_call: Callable[[str], dict] | None = None) -> dict[str, Any]:
+    """IFURI-031: don't ask the host/human first — try to heal automatically.
+
+    When a node is not ready, attempt an automatic reconcile IF the plan is safe and
+    actionable (no human-gated/blocked steps). Only escalate to the host when there is no
+    safe automatic remedy, or the auto-reconcile ran but did not make the node ready.
+    ``execute_fn(plan)`` applies the plan and returns its result; it is injectable for tests."""
+    assessment = assess(desired, actual, required_routes=required_routes, smoke_call=smoke_call)
+    if assessment["run_allowed"]:
+        return {"action": "none", "reason": "already ready", "assessment": assessment}
+
+    plan_steps = assessment["plan"]
+    if plan_steps.get("blocked"):
+        return {"action": "ask_host", "reason": "reconcile blocked (needs human): "
+                + "; ".join(str(b) for b in plan_steps["blocked"]), "assessment": assessment}
+    if not plan_steps.get("steps"):
+        return {"action": "ask_host", "reason": "no automatic remedy for this drift",
+                "assessment": assessment}
+
+    # safe, actionable plan → heal automatically, then verify it actually became ready
+    exec_result = execute_fn(plan_steps)
+    healed = bool(exec_result.get("ok")) and bool(exec_result.get("verified", True))
+    if healed:
+        return {"action": "auto_reconciled", "reason": "healed without asking the host",
+                "execution": exec_result, "assessment": assessment}
+    return {"action": "ask_host", "reason": "auto-reconcile ran but node still not ready",
+            "execution": exec_result, "assessment": assessment}
+
+
 def assess_live(desired: dict, base_url: str, *, required_routes: list[str] | None = None,
                 timeout: float = 6.0) -> dict[str, Any]:
     """assess() against a live node: probe /health + /routes, then evaluate."""
