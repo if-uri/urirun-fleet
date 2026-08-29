@@ -1,0 +1,66 @@
+{
+  "schema": "new-project.governance/v2",
+  "standard": {
+    "id": "wellmanifest/new-project",
+    "version": "0.19.6"
+  },
+  "requiredFiles": [
+    "README.md",
+    "Makefile",
+    "pyproject.toml"
+  ],
+  "governancePaths": [
+    "project/ticket-*/**"
+  ],
+  "trustedApprovalSources": [
+    "github-review",
+    "github-app-review",
+    "signed-attestation"
+  ],
+  "ticket": {
+    "root": "project",
+    "directoryPattern": "^ticket-[0-9]{3}$",
+    "requiredFiles": [
+      "README.md",
+      "intent.json"
+    ],
+    "requiredAgentFiles": [],
+    "activeStatuses": [
+      "IN_PROGRESS"
+    ],
+    "nonActiveStatuses": [
+      "BACKLOG",
+      "PLAN",
+      "BLOCKED"
+    ],
+    "closedStatuses": [
+      "DONE",
+      "CANCELLED"
+    ],
+    "implementationStates": [
+      "EDIT",
+      "VALIDATION",
+      "PUBLICATION"
+    ],
+    "intentFile": "intent.json"
+  },
+  "docker": {
+    "required": false,
+    "dockerfiles": ["Dockerfile"],
+    "composeFiles": ["compose.yml", "compose.yaml", "docker-compose.yml", "docker-compose.yaml"]
+  },
+  "coordination": {
+    "mode": "workstreams",
+    "maxActiveTicketsPerWorkstream": 1,
+    "rejectActiveScopeOverlap": true,
+    "workstreams": {
+      "application": { "ownedPaths": ["urirun_fleet/**", "tests/**", "examples/**"] },
+      "governance": { "ownedPaths": [".governance/**", "README.md", ".env.example", "project/**"] },
+      "integration": { "ownedPaths": ["pyproject.toml", "Makefile"] }
+    },
+    "integration": {
+      "workstream": "integration",
+      "requiredForPaths": ["pyproject.toml"]
+    }
+  }
+}
