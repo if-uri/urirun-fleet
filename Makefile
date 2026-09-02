@@ -12,4 +12,4 @@ doctor-test:
 	$(PYTHON) -m pytest -q
 
 doctor-health:
-	$(PYTHON) -m urirun_fleet.cli --help >/dev/null
+	$(PYTHON) -m urirun_fleet.cli --help
